@@ -18,7 +18,7 @@ You can install the development version directly from GitHub:
 install.packages("devtools")
 
 # Install autoproteoR from GitHub
-devtools::install_github("https://github.com/Luiz-Garcia-R/autoproteoR_0.0.1.git")
+devtools::install_github("https://github.com/Luiz-Garcia-R/autoproteoR.git")
 ```
 
 ## Input Data Format (Very Important)
