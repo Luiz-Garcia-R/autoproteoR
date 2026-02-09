@@ -61,7 +61,8 @@
 #'
 #' @export
 
-proteo.heatmap <- function(normalized_data, metadata,
+proteo.heatmap <- function(normalized_data,
+                           metadata = NULL,
                            group_colname = "Group",
                            top_n = 100,
                            cluster_rows = TRUE,
@@ -75,7 +76,7 @@ proteo.heatmap <- function(normalized_data, metadata,
                            envir = parent.frame(),
                            help = FALSE) {
 
-  if (help || missing(normalized_data) || missing(metadata)) {
+  if (help || missing(normalized_data)) {
     message("
 Function proteo.heatmap()
 
@@ -87,40 +88,11 @@ Description:
 Usage:
   proteo.heatmap(normalized_data, metadata, top_n = 100, ...)
 
-Arguments:
-  normalized_data  Normalized data.frame or proteoNorm object with ProteinID column.
-  metadata         Data frame with 'Sample' and group assignment columns.
-  top_n            Number of most variable proteins to include (default 100).
-  cluster_rows     Cluster rows? Default TRUE.
-  cluster_cols     Cluster columns? Default TRUE.
-  show_rownames    Show protein IDs? Default FALSE.
-  show_colnames    Show sample names? Default TRUE.
-  palette          Color palette. Default blue-white-red.
-  results          Return processed data? Default FALSE.
-  assign_result    Assign result to environment? Default FALSE.
-  assign_name      Name of assigned object. Default 'heatmap_data'.
-  envir            Environment to assign if assign_result = TRUE.
-  help             Show this message.
-
-Example (functional):
-  raw_data <- data.frame(
-    ProteinID = c('P1','P2','P3','P4'),
-    Control_1 = c(6.2,0,4.5,3.1),
-    Control_2 = c(6.1,0,4.8,3.3),
-    Treatment_1 = c(5.9,0,5.0,2.9),
-    Treatment_2 = c(6.0,0,4.9,3.0)
-  )
-
-  metadata <- data.frame(
-    Sample = c('Control_1','Control_2','Treatment_1','Treatment_2'),
-    Group  = c('Control','Control','Treatment','Treatment')
-  )
-
   # Step 1: Normalize data
-  normalized_obj <- proteo.normalize(raw_data, metadata)
+  proteo.normalize(raw_data, metadata)
 
   # Step 2: Generate heatmap
-  proteo.heatmap(normalized_obj, metadata, top_n = 3)
+  proteo.heatmap(normalized_data)
 ")
     return(invisible(NULL))
   }
@@ -129,17 +101,37 @@ Example (functional):
   if (!requireNamespace("pheatmap", quietly = TRUE)) stop("Please install 'pheatmap'.")
   if (!requireNamespace("dplyr", quietly = TRUE)) stop("Please install 'dplyr'.")
 
-  # --- Extract normalized dataframe ---
-  if ("proteoNorm" %in% class(normalized_data)) {
-    df_names <- grep("_normalized$", names(normalized_data), value = TRUE)
-    if (length(df_names) != 1) stop("Could not detect the normalized data.frame in 'proteoNorm'.")
-    normalized_data <- normalized_data[[df_names]]
+  # ================================
+  # 1) Extract metadata and matrix
+  # ================================
+  if (!is.list(normalized_data) || is.null(normalized_data$metadata) || is.null(normalized_data$normalized_matrix)) {
+    stop("normalized_data must be a proteonorm object containing $normalized_matrix and $metadata.")
   }
 
+  metadata <- normalized_data$metadata
+  normalized_matrix <- normalized_data$normalized_matrix
+
+  # --- Detect ProteinID column ---
+  col_id <- which(names(normalized_matrix) == "ProteinID")
+  if (length(col_id) != 1) stop("Unable to detect ProteinID column in normalized_matrix.")
+
+  protein_ids <- normalized_matrix[[col_id]]
+  expr_data <- normalized_matrix[, -col_id, drop = FALSE]
+  expr_data <- as.matrix(expr_data)
+  storage.mode(expr_data) <- "numeric"
+  rownames(expr_data) <- protein_ids
+
+  # --- Check group column in metadata ---
+  if (!"Sample" %in% colnames(metadata)) stop("Metadata must contain 'Sample'.")
+  if (!"Group" %in% colnames(metadata)) stop("Metadata must contain 'Group'.")
+
+  sample_groups <- metadata$Group
+  names(sample_groups) <- metadata$Sample
+
   # --- Prepare numeric matrix ---
-  if (!"ProteinID" %in% colnames(normalized_data)) stop("Missing column 'ProteinID' in normalized_data.")
-  protein_ids <- normalized_data$ProteinID
-  expr_data <- normalized_data[, -which(colnames(normalized_data) == "ProteinID")]
+  if (!"ProteinID" %in% colnames(normalized_matrix)) stop("Missing column 'ProteinID' in normalized_data.")
+  protein_ids <- normalized_matrix$ProteinID
+  expr_data <- normalized_matrix[, -which(colnames(normalized_matrix) == "ProteinID")]
   expr_data <- as.matrix(expr_data)
   storage.mode(expr_data) <- "numeric"
   rownames(expr_data) <- protein_ids

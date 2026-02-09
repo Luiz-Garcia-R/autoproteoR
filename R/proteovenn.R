@@ -45,43 +45,6 @@
 
 proteo.venn <- function(normalized_data, cutoff = 0, results = FALSE, help = FALSE) {
 
-  # --- Help message ---
-  if (help || missing(normalized_data)) {
-    message("
-Function proteo.venn()
-
-Description:
-  Generates a Venn diagram showing protein overlaps between groups.
-  Highlights unique and shared proteins based on presence/absence data
-  derived from proteo.normalize().
-
-Usage:
-  proteo.venn(normalized_data, cutoff = 0, results = FALSE)
-
-Arguments:
-  normalized_data  List returned by proteo.normalize() (presence_per_group) or data frame.
-  cutoff           Minimum presence threshold to consider protein as present. Default 0.
-  results          Logical. Return list with proteins by group, unique, and shared? Default FALSE.
-  help             Logical. If TRUE, prints this help message.
-
-Return:
-  Invisibly returns NULL, or if results = TRUE, a list with:
-    - proteins_by_group : List of proteins present in each group
-    - proteins_unique   : List of unique proteins per group
-    - proteins_shared   : Vector of proteins shared across all groups
-
-Example:
-  presence_per_group <- data.frame(
-    ProteinID = paste0('P', 1:5),
-    Control = c(1,1,0,1,0),
-    Treatment = c(1,0,1,1,1)
-  )
-  normalized_data <- list(presence_per_group = presence_per_group)
-  venn_res <- proteo.venn(normalized_data, cutoff=0, results=TRUE)
-")
-    return(invisible(NULL))
-  }
-
   if (!requireNamespace("ggvenn", quietly = TRUE)) {
     stop("Please install the 'ggvenn' package: install.packages('ggvenn')")
   }

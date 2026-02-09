@@ -5,9 +5,6 @@
 #' The input must be an object returned by \code{proteo.normalize()} (class \code{proteoNorm}).
 #'
 #' @param normalized_data Object of class \code{proteoNorm} returned by \code{proteo.normalize()}.
-#' @param metadata A data frame containing sample metadata. Must include:
-#'                 - \code{Sample}: column matching the column names of the normalized data (excluding ProteinID)
-#'                 - \code{Group}: group/condition labels for PCA coloring
 #' @param cluster_rows Logical. Whether to cluster rows in the boxplot? Default FALSE.
 #' @param cluster_cols Logical. Whether to cluster columns in the boxplot? Default FALSE.
 #' @param angle_col Numeric. Angle of column labels in the boxplot. Default 45.
@@ -45,13 +42,12 @@
 #' @importFrom stats prcomp
 #' @export
 
-
-proteo.qc <- function(normalized_data, metadata,
+proteo.qc <- function(normalized_data,
                       cluster_rows = FALSE, cluster_cols = FALSE,
                       angle_col = 45, help = FALSE) {
 
   # --- Help message ---
-  if (help || missing(normalized_data) || missing(metadata)) {
+  if (help || missing(normalized_data)) {
     message("
 Function proteo.qc()
 
@@ -67,42 +63,12 @@ Important:
   Directly using a raw data.frame will produce an error.
 
 Usage:
-  proteo.qc(normalized_data, metadata, cluster_rows = FALSE, cluster_cols = FALSE, angle_col = 45)
-
-Arguments:
-  normalized_data  Object of class 'proteoNorm' (from proteo.normalize()).
-  metadata         Data frame with sample metadata. Must include:
-                     - 'Sample': matches column names of normalized_data (excluding 'ProteinID')
-                     - 'Group' : group/condition labels for PCA coloring
-  cluster_rows     Logical. Whether to cluster rows in boxplot? Default FALSE.
-  cluster_cols     Logical. Whether to cluster columns in boxplot? Default FALSE.
-  angle_col        Numeric. Angle of column labels in boxplot. Default 45.
-  help             Logical. If TRUE, prints this help message.
-
-Return:
-  A list with:
-    - boxplot  : ggplot2 object showing distribution of intensities per sample
-    - pca      : ggplot2 object showing PCA colored by group
-
-Example (functional):
-  raw_data <- data.frame(
-    ProteinID = c('P1','P2','P3','P4'),
-    Control_1 = c(6.2,0,4.5,3.1),
-    Control_2 = c(6.1,0,4.8,3.3),
-    Treatment_1 = c(5.9,0,5.0,2.9),
-    Treatment_2 = c(6.0,0,4.9,3.0)
-  )
-
-  metadata <- data.frame(
-    Sample = c('Control_1','Control_2','Treatment_1','Treatment_2'),
-    Group  = c('Control','Control','Treatment','Treatment')
-  )
 
   # Step 1: Normalize data
-  normalized_obj <- proteo.normalize(raw_data, metadata)
+  proteo.normalize(raw_data, metadata)
 
   # Step 2: Generate QC plots
-  proteo.qc(normalized_obj, metadata)
+  proteo.qc(normalized_data)
 ")
     return(invisible(NULL))
   }
@@ -112,25 +78,31 @@ Example (functional):
   missing_pkgs <- req_pkgs[!vapply(req_pkgs, requireNamespace, logical(1), quietly = TRUE)]
   if (length(missing_pkgs)) stop("Please install packages: ", paste(missing_pkgs, collapse = ", "))
 
-  # ---- extract normalized data.frame from proteoNorm/list if needed ----
-  expr_df <- NULL
-  if (is.list(normalized_data)) {
-    # prefer element matching *_normalized
-    df_names <- grep("_normalized$", names(normalized_data), value = TRUE)
-    if (length(df_names) >= 1) {
-      expr_df <- normalized_data[[df_names[1]]]
-    } else {
-      # fallback: first element that is a data.frame and contains ProteinID
-      df_candidates <- Filter(function(x) is.data.frame(x) && "ProteinID" %in% colnames(x), normalized_data)
-      if (length(df_candidates) >= 1) expr_df <- df_candidates[[1]]
-    }
-  } else if (is.data.frame(normalized_data)) {
-    expr_df <- normalized_data
+  # Extract metadata and normalized matrix
+  if (!is.list(normalized_data) || is.null(normalized_data$metadata) || is.null(normalized_data$normalized_matrix)) {
+    stop("normalized_data must be a proteonorm object containing $normalized_matrix and $metadata.")
   }
 
-  if (is.null(expr_df) || !is.data.frame(expr_df)) {
-    stop("Input must be a data.frame or a list returned by proteo.normalize() (containing a <name>_normalized data.frame).")
-  }
+  metadata <- normalized_data$metadata
+  expr_df <- normalized_data$normalized_matrix
+
+  # --- Detect ProteinID column ---
+  col_id <- which(names(expr_df) == "ProteinID")
+  if (length(col_id) != 1) stop("Unable to detect ProteinID column in normalized_matrix.")
+
+  protein_ids <- expr_df[[col_id]]
+  data_mat <- expr_df[, -col_id, drop = FALSE]
+  data_mat <- as.matrix(data_mat)
+  storage.mode(data_mat) <- "numeric"
+  rownames(data_mat) <- protein_ids
+
+  # --- Align samples with metadata ---
+  if (!"Sample" %in% colnames(metadata)) stop("Metadata must contain 'Sample'.")
+  if (!"Group" %in% colnames(metadata)) stop("Metadata must contain 'Group'.")
+  common_samples <- intersect(metadata$Sample, colnames(data_mat))
+  if (length(common_samples) == 0) stop("No sample names match between metadata$Sample and expression matrix column names.")
+  metadata <- metadata[match(common_samples, metadata$Sample), , drop = FALSE]
+  data_mat <- data_mat[, common_samples, drop = FALSE]
 
   # ensure not a tibble with rownames weirdness
   expr_df <- as.data.frame(expr_df, stringsAsFactors = FALSE, check.names = FALSE)

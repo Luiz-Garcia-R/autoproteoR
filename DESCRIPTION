@@ -17,21 +17,11 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
-Imports:
-    crayon,
-    dplyr,
-    ggplot2,
-    ggvenn,
-    ggrepel,
-    pheatmap,
-    RColorBrewer,
-    stats,
-    tidyr,
-    umap,
-Suggests:
-    testthat,
-    knitr,
-    rmarkdown,
-    clusterProfiler
-Depends: 
-    R (>= 3.5)
+Imports: crayon, dplyr, ggplot2, ggvenn, ggrepel, pheatmap,
+        RColorBrewer, stats, tidyr, umap,
+Suggests: testthat, knitr, rmarkdown, clusterProfiler
+Depends: R (>= 3.5)
+NeedsCompilation: no
+Packaged: 2025-09-10 21:46:39 UTC; Seu Computador
+Author: Luiz Garcia [aut, cre] (<https://orcid.org/0000-0002-9616-0927>, UFPR)
+Maintainer: Luiz Garcia <luiz.cardoso@ufpr.br>

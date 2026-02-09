@@ -62,89 +62,53 @@
 #' @importFrom ggrepel geom_text_repel
 #' @export
 
-proteo.volcano <- function(normalized_data, metadata, group_col = "Group",
+proteo.volcano <- function(normalized_data, group_col = "Group",
                            padj_threshold = 0.05, log2fc_threshold = 1,
-                           results = FALSE, identify = FALSE, help = FALSE) {
+                           results = FALSE, identify = FALSE) {
 
-  # --- Help message ---
-  if (help || missing(normalized_data) || missing(metadata)) {
-    message("
-Function proteo.volcano()
-
-Description:
-  Generates a volcano plot from normalized proteomics data.
-  Highlights differentially expressed proteins (DEPs) based on adjusted p-value
-  and log2 fold-change thresholds. Protein labels can optionally be displayed.
-
-Usage:
-  proteo.volcano(normalized_data, metadata, group_col = 'Group',
-                 padj_threshold = 0.05, log2fc_threshold = 1,
-                 results = FALSE, identify = FALSE)
-
-Arguments:
-  normalized_data  Data frame with normalized abundances or proteoNorm object.
-  metadata         Data frame with sample metadata. Must contain 'Sample' and group column.
-  group_col        Column name in metadata identifying the groups. Default: 'Group'.
-  padj_threshold   Adjusted p-value cutoff. Default: 0.05.
-  log2fc_threshold Log2 fold-change cutoff. Default: 1.
-  results          Logical. Return list with DEPs? Default: FALSE.
-  identify         Logical. Add protein labels to plot? Default: FALSE.
-  help             Logical. If TRUE, prints this help message.
-
-Return:
-  Invisibly returns a list with 'up', 'down', and 'full_results'.
-
-Example:
-  normalized_data <- data.frame(
-    ProteinID = paste0('P',1:6),
-    Control1 = c(100,200,150,80,120,160),
-    Control2 = c(110,210,140,90,130,170),
-    Treatment1 = c(300,100,200,60,220,180),
-    Treatment2 = c(310,90,210,70,230,190)
-  )
-  metadata <- data.frame(
-    Sample = c('Control1','Control2','Treatment1','Treatment2'),
-    Group  = c('Control','Control','Treatment','Treatment')
-  )
-  proteo.volcano(normalized_data, metadata, group_col='Group', results=TRUE, identify=TRUE)
-")
-    return(invisible(NULL))
+  # --- Extract metadata and expression matrix if proteonorm object ---
+  if ("proteonorm" %in% class(normalized_data)) {
+    expr_df <- normalized_data$normalized_matrix  # já é data.frame
+    metadata <- normalized_data$metadata
+  } else {
+    expr_df <- as.data.frame(normalized_data)
   }
 
-  # --- Detect proteoNorm object ---
-  if ("proteoNorm" %in% class(normalized_data)) {
-    df_names <- grep("_normalized$", names(normalized_data), value = TRUE)
-    if (length(df_names) != 1) stop("Could not detect the normalized dataframe in the proteoNorm object.")
-    normalized_data <- normalized_data[[df_names]]
-  }
+  # --- Detect ProteinID column robustly ---
+  possible_id_names <- c("ProteinID", "Protein_ID", "Protein", "Accession",
+                         "Protein.Accession", "protein_id")
+  protein_col <- intersect(names(expr_df), possible_id_names)[1]
+  if (is.null(protein_col)) stop("Unable to detect ProteinID column in normalized_data.")
+  protein_ids <- expr_df[[protein_col]]
 
   # --- Prepare expression matrix ---
-  if (!"ProteinID" %in% colnames(normalized_data)) {
-    stop("normalized_data must contain a 'ProteinID' column.")
-  }
-  protein_ids <- normalized_data$ProteinID
-  expr_mat <- normalized_data[, -which(colnames(normalized_data) == "ProteinID")]
-  expr_mat <- as.matrix(expr_mat)
+  expr_cols <- setdiff(names(expr_df), protein_col)
+  if (length(expr_cols) == 0) stop("No expression columns detected in normalized_data after removing ProteinID.")
+  expr_mat <- as.matrix(expr_df[, expr_cols, drop = FALSE])
   storage.mode(expr_mat) <- "numeric"
   rownames(expr_mat) <- protein_ids
 
-  # --- Prepare metadata ---
-  if (!"Sample" %in% colnames(metadata)) stop("Metadata must contain the column 'Sample'.")
-  if (!group_col %in% colnames(metadata)) stop("Group column not found in metadata.")
+  # --- Check metadata ---
+  if (is.null(metadata)) stop("metadata must be provided or included in proteoNorm object.")
+  possible_sample_names <- c("Sample", "sample", "SAMPLE")
+  sample_col <- intersect(possible_sample_names, names(metadata))[1]
+  if (is.null(sample_col)) stop("Metadata must contain a 'Sample' column.")
 
+  # --- Group column detection ---
+  if (is.null(group_col) || !group_col %in% names(metadata)) {
+    possible_group_names <- c("Group", "group", "GROUP", "Condition", "condition")
+    group_col <- intersect(possible_group_names, names(metadata))[1]
+    if (is.null(group_col)) stop("Unable to detect Group column in metadata.")
+  }
+
+  # --- Extract samples per group ---
   groups <- unique(metadata[[group_col]])
   if (length(groups) != 2) stop("This function currently supports exactly 2 groups.")
-
-  g1 <- groups[1]
-  g2 <- groups[2]
-
-  g1_samples <- metadata$Sample[metadata[[group_col]] == g1]
-  g2_samples <- metadata$Sample[metadata[[group_col]] == g2]
+  g1_samples <- metadata[[sample_col]][metadata[[group_col]] == groups[1]]
+  g2_samples <- metadata[[sample_col]][metadata[[group_col]] == groups[2]]
 
   missing <- setdiff(c(g1_samples, g2_samples), colnames(expr_mat))
-  if (length(missing) > 0) {
-    stop("Samples not found in normalized_data: ", paste(missing, collapse = ", "))
-  }
+  if (length(missing) > 0) stop("Samples not found in normalized_data: ", paste(missing, collapse = ", "))
 
   expr_sub <- expr_mat[, c(g1_samples, g2_samples), drop = FALSE]
 
@@ -156,34 +120,34 @@ Example:
   for (i in seq_len(nrow(expr_sub))) {
     vals1 <- as.numeric(expr_sub[i, g1_samples])
     vals2 <- as.numeric(expr_sub[i, g2_samples])
-    ttest <- try(stats::t.test(vals2, vals1), silent = TRUE)
-    if (inherits(ttest, "try-error")) {
+    if (length(vals1) < 2 || length(vals2) < 2) {
       res_df$pvalue[i] <- NA
       res_df$log2FoldChange[i] <- NA
     } else {
-      res_df$pvalue[i] <- ttest$p.value
-      res_df$log2FoldChange[i] <- mean(vals2, na.rm = TRUE) - mean(vals1, na.rm = TRUE)
+      ttest <- try(stats::t.test(vals2, vals1), silent = TRUE)
+      if (inherits(ttest, "try-error")) {
+        res_df$pvalue[i] <- NA
+        res_df$log2FoldChange[i] <- NA
+      } else {
+        res_df$pvalue[i] <- ttest$p.value
+        res_df$log2FoldChange[i] <- mean(vals2, na.rm = TRUE) - mean(vals1, na.rm = TRUE)
+      }
     }
   }
 
   res_df$padj <- stats::p.adjust(res_df$pvalue, method = "BH")
-  res_df <- dplyr::filter(res_df, !is.na(pvalue))
+  res_df <- res_df[!is.na(res_df$pvalue), ]
 
   # --- Volcano summary ---
   up <- res_df$Protein[res_df$padj < padj_threshold & res_df$log2FoldChange > log2fc_threshold]
   down <- res_df$Protein[res_df$padj < padj_threshold & res_df$log2FoldChange < -log2fc_threshold]
 
   message("=== Volcano summary ===")
-  message("Groups: ", g1, " vs ", g2)
-  message("Up (", g2, "): ", length(up))
-  message("Down (", g1, "): ", length(down))
+  message("Groups: ", groups[1], " vs ", groups[2])
+  message("Up (", groups[2], "): ", length(up))
+  message("Down (", groups[1], "): ", length(down))
   message("padj threshold: ", padj_threshold, " | log2FC threshold: ", log2fc_threshold)
   message("=================================")
-
-  if (!results) {
-    message("Tip: To see differentially expressed proteins, call with 'results = TRUE'.")
-    message("You can also label proteins on the volcano plot using 'identify = TRUE'.")
-  }
 
   # --- Volcano plot ---
   res_df$group_color <- factor(ifelse(res_df$padj < padj_threshold & res_df$log2FoldChange > log2fc_threshold, "Up",
@@ -195,37 +159,20 @@ Example:
     ggplot2::labs(color = "Regulation",
                   x = "log2 Fold Change",
                   y = "-log10(p-value)",
-                  title = paste0(g2, " vs ", g1)) +
-    ggplot2::theme_minimal(base_size = 16) +
+                  title = paste0(groups[2], " vs ", groups[1])) +
+    ggplot2::theme_minimal(base_size = 12) +
     ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5),
                    panel.border = ggplot2::element_rect(color = "black", fill = NA, linewidth = 1),
                    plot.background = ggplot2::element_rect(fill = "white", color = NA),
                    panel.background = ggplot2::element_rect(fill = "white", color = NA))
 
-  # --- Add labels if identify = TRUE ---
   if (identify) {
     p <- p + ggrepel::geom_text_repel(ggplot2::aes(label = Protein), size = 3, max.overlaps = 50, na.rm = TRUE)
   }
 
   print(p)
-
-  # --- Return DEPs if requested ---
   volcano_deps <- list(up = up, down = down, full_results = res_df)
 
   if (results) return(volcano_deps)
   invisible(volcano_deps)
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
