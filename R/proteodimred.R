@@ -7,8 +7,6 @@
 #'
 #' @param normalized_data A data.frame or a list from \code{proteo.normalize()} containing
 #'   normalized protein expression. Must have a ProteinID column.
-#' @param metadata A data.frame containing sample metadata. Must contain columns for
-#'   sample names and group assignment.
 #' @param n_neighbors Integer. Number of neighbors for UMAP. If NULL or larger than the number
 #'   of samples, defaults to half the number of samples. Default is NULL.
 #' @param verbose Logical. If TRUE (default), prints messages and summary statistics.
@@ -26,25 +24,33 @@
 #' }
 #'
 #' @examples
-#' # Small example: raw data
+#'
+#' proteins <- paste0("P", sprintf("%03d", 1:50))
+#'
 #' raw_data <- data.frame(
-#'   ProteinID = paste0("P", 1:5),
-#'   Control1 = c(100, 200, 150, 300, 250),
-#'   Control2 = c(110, 210, 160, 310, 260),
-#'   Treatment1 = c(300, 100, 200, 150, 250),
-#'   Treatment2 = c(310, 90, 210, 140, 260)
+#'   ProteinID = proteins,
+#'   Control_1   = rnorm(50, mean = 10000, sd = 2000),
+#'   Control_2   = rnorm(50, mean = 10000, sd = 2000),
+#'   Control_3   = rnorm(50, mean = 10000, sd = 2000),
+#'   Control_4   = rnorm(50, mean = 10000, sd = 2000),
+#'   Control_5   = rnorm(50, mean = 10000, sd = 2000),
+#'   Treatment_1 = rnorm(50, mean = 20000, sd = 2500),
+#'   Treatment_2 = rnorm(50, mean = 20000, sd = 2500),
+#'   Treatment_3 = rnorm(50, mean = 20000, sd = 2500),
+#'   Treatment_4 = rnorm(50, mean = 30000, sd = 2500),
+#'   Treatment_5 = rnorm(50, mean = 30000, sd = 2500)
 #' )
 #'
 #' metadata <- data.frame(
-#'   Sample = c("Control1", "Control2", "Treatment1", "Treatment2"),
-#'   Group = c("Control", "Control", "Treatment", "Treatment")
+#'   Sample = colnames(raw_data)[-1],
+#'   Group  = rep(c("Control", "Treatment"), each = 5)
 #' )
 #'
 #' # Step 1: Normalize
-#' normalized_obj <- proteo.normalize(raw_data, metadata)
+#' normalized_obj <- proteo.normalize(raw_data, metadata, method = "none", verbose = FALSE)
 #'
 #' # Step 2: Perform dimensionality reduction
-#' proteo.dimred(normalized_obj, metadata)
+#' proteo.dimred(normalized_obj)
 #'
 #' @references
 #' PCA: Pearson 1901 <doi:10.1080/14786440109462720>
@@ -53,11 +59,13 @@
 #' @export
 
 proteo.dimred <- function(normalized_data,
-                          n_neighbors = NULL, verbose = TRUE,
+                          n_neighbors = NULL,
+                          verbose = TRUE,
                           help = FALSE) {
 
   if (help || missing(normalized_data)) {
     message("
+
 Function proteo.dimred()
 
 Description:
@@ -249,6 +257,10 @@ Usage:
 
   print(p_pca)
   print(p_umap)
+
+  # ================================
+  # Return
+  # ================================
 
   invisible(list(
     pca = pca_res,

@@ -13,6 +13,7 @@
 #' @return A correlation matrix.
 #'
 #' @examples
+#' \dontrun{
 #' # Small example: raw data
 #' raw_data <- data.frame(
 #'   ProteinID = paste0("P", 1:5),
@@ -28,11 +29,11 @@
 #' )
 #'
 #' # Step 1: Normalize raw data
-#' normalized_obj <- proteo.normalize(raw_data, metadata)
+#' proteo.normalize(raw_data, metadata, method = 'none')
 #'
 #' # Step 2: Compute correlation matrix
-#' corr_mat <- proteo.corr(normalized_obj, metadata)
-#'
+#' proteo.corr(normalized_data)
+#' }
 #' @references
 #' Pearson correlation: Pearson 1895 <doi:10.1098/rspl.1895.0041>
 #' Spearman correlation: Spearman 1904 <doi:10.1037/1082-989X.9.2.220>
@@ -40,8 +41,11 @@
 #' @export
 
 
-proteo.corr <- function(normalized_data, group_level = TRUE,
-                        method = "auto", plot = TRUE, help = FALSE) {
+proteo.corr <- function(normalized_data,
+                        group_level = TRUE,
+                        method = "auto",
+                        plot = TRUE,
+                        help = FALSE) {
 
   if (help || missing(normalized_data)) {
     message("
@@ -220,7 +224,7 @@ Usage:
       # choose smoothing method
       smooth_method <- if (tolower(metodo_usado) == "pearson") "lm" else "loess"
 
-      # estilo 1 aesthetics
+      # Style 1 aesthetics
       g <- ggplot2::ggplot(dados, ggplot2::aes(x = x, y = y)) +
         ggplot2::geom_point(alpha = 0.60, size = 2.5, col = "grey30") +
         ggplot2::geom_smooth(method = smooth_method, se = FALSE, linetype = "dashed", color = "steelblue") +

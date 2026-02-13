@@ -6,7 +6,7 @@
 \usage{
 proteo.heatmap(
   normalized_data,
-  metadata,
+  metadata = NULL,
   group_colname = "Group",
   top_n = 100,
   cluster_rows = TRUE,
@@ -91,7 +91,6 @@ normalized_obj <- proteo.normalize(raw_data, metadata)
 
 # Step 2: Generate heatmap
 proteo.heatmap(normalized_obj, metadata, top_n = 3)
-proteo.heatmap(normalized_obj, metadata, top_n = 3, results = TRUE)
 }
 
 }

@@ -43,7 +43,7 @@ presence_per_group <- data.frame(
 normalized_data <- list(presence_per_group = presence_per_group)
 
 # Generate Venn diagram and return results
-venn_res <- proteo.venn(normalized_data, cutoff = 0, results = TRUE)
+proteo.venn(normalized_data)
 }
 
 }

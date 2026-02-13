@@ -6,7 +6,6 @@
 \usage{
 proteo.qc(
   normalized_data,
-  metadata,
   cluster_rows = FALSE,
   cluster_cols = FALSE,
   angle_col = 45,
@@ -15,10 +14,6 @@ proteo.qc(
 }
 \arguments{
 \item{normalized_data}{Object of class \code{proteoNorm} returned by \code{proteo.normalize()}.}
-
-\item{metadata}{A data frame containing sample metadata. Must include:
-- \code{Sample}: column matching the column names of the normalized data (excluding ProteinID)
-- \code{Group}: group/condition labels for PCA coloring}
 
 \item{cluster_rows}{Logical. Whether to cluster rows in the boxplot? Default FALSE.}
 
@@ -54,10 +49,10 @@ metadata <- data.frame(
 )
 
 # Step 1: Normalize
-normalized_obj <- proteo.normalize(raw_data, metadata)
+normalized_obj <- proteo.normalize(raw_data, metadata, method = "none")
 
 # Step 2: QC plots
-proteo.qc(normalized_obj, metadata)
+proteo.qc(normalized_obj)
 
 }
 \references{

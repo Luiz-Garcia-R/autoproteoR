@@ -39,8 +39,10 @@
 #' print(obj)
 #' }
 
-
-proteo.import <- function(raw_data, metadata = NULL, strict = TRUE, help = FALSE) {
+proteo.import <- function(raw_data,
+                          metadata = NULL,
+                          strict = TRUE,
+                          help = FALSE) {
 
   # --- Help message ---
   if (help || missing(raw_data)) {
@@ -204,14 +206,3 @@ print.proteoR <- function(x, ...) {
   }
   invisible(x)
 }
-
-
-
-
-
-
-
-
-
-
-

@@ -6,7 +6,6 @@
 \usage{
 proteo.corr(
   normalized_data,
-  metadata = NULL,
   group_level = TRUE,
   method = "auto",
   plot = TRUE,
@@ -14,9 +13,7 @@ proteo.corr(
 )
 }
 \arguments{
-\item{normalized_data}{A \code{data.frame} or \code{proteoNorm} object containing normalized protein expression.}
-
-\item{metadata}{Optional \code{data.frame} with sample metadata. Required if \code{group_level = TRUE}.}
+\item{normalized_data}{A \code{data.frame} or \code{proteonorm} object containing normalized protein expression.}
 
 \item{group_level}{Logical. If TRUE (default), correlation is computed at the group level (averaging samples per group).}
 
@@ -35,6 +32,7 @@ Automatically chooses Pearson or Spearman correlation based on normality and tie
 and provides heatmap and scatterplot visualizations.
 }
 \examples{
+\dontrun{
 # Small example: raw data
 raw_data <- data.frame(
   ProteinID = paste0("P", 1:5),
@@ -50,11 +48,11 @@ metadata <- data.frame(
 )
 
 # Step 1: Normalize raw data
-normalized_obj <- proteo.normalize(raw_data, metadata)
+proteo.normalize(raw_data, metadata, method = 'none')
 
 # Step 2: Compute correlation matrix
-corr_mat <- proteo.corr(normalized_obj, metadata)
-
+proteo.corr(normalized_data)
+}
 }
 \references{
 Pearson correlation: Pearson 1895 \url{doi:10.1098/rspl.1895.0041}

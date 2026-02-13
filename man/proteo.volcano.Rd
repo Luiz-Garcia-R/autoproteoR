@@ -6,21 +6,16 @@
 \usage{
 proteo.volcano(
   normalized_data,
-  metadata,
   group_col = "Group",
   padj_threshold = 0.05,
   log2fc_threshold = 1,
   results = FALSE,
-  identify = FALSE,
-  help = FALSE
+  identify = FALSE
 )
 }
 \arguments{
 \item{normalized_data}{A data frame with normalized abundances
 (containing a \code{ProteinID} column) or an object of class \code{proteoNorm}.}
-
-\item{metadata}{A data frame with sample metadata. Must include columns
-\code{Sample} and the one defined in \code{group_col}.}
 
 \item{group_col}{Column name in \code{metadata} that identifies the groups
 (default = \code{"Group"}). Only two groups are supported.}
@@ -32,8 +27,6 @@ proteo.volcano(
 \item{results}{Logical. If TRUE, returns a list with DEPs (default = FALSE).}
 
 \item{identify}{Logical. If TRUE, adds protein labels directly on the plot (default = FALSE).}
-
-\item{help}{Logical. If TRUE, prints this help message instead of running the function.}
 }
 \value{
 Invisibly returns a list with three elements:

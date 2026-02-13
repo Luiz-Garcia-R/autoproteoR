@@ -6,7 +6,7 @@
 #' and annotates UniProt IDs using \code{clusterProfiler::bitr}. Optionally,
 #' it generates a bar plot of the top up- and down-regulated proteins.
 #'
-#' @param x A list returned by \code{proteo.normalize()} containing
+#' @param normalized_data A list returned by \code{proteo.normalize()} containing
 #'   normalized protein expression in \code{x$normalized_matrix} and
 #'   sample metadata in \code{x$metadata}.
 #' @param group_col Character. Column in \code{x$metadata} specifying group labels. Default = "Group".
@@ -14,7 +14,7 @@
 #' @param p_adj_cutoff Numeric. Adjusted p-value threshold to define significance. Default = 0.05.
 #' @param logfc_cutoff Numeric. Log2 fold-change threshold to define up- or down-regulation. Default = 0.5.
 #' @param top_n Integer. Number of top up- and down-regulated proteins to display. Default = 10.
-#' @param db Character. Organism database for annotation: "hs" (human) or "mm" (mouse). Default = "hs".
+#' @param organism Character. Organism database for annotation: "hs" (human) or "mm" (mouse). Default = "hs".
 #' @param plot Logical. If TRUE (default), generates a bar plot of top DEPs.
 #' @param verbose Logical. If TRUE (default), prints messages and progress information.
 #'
@@ -29,7 +29,7 @@
 #' }
 #'
 #' @examples
-#'
+#' \dontrun{
 #' raw_data <- data.frame(
 #' ProteinID = c("P04637", "P31749", "Q16539", "P00533", "P38398"), # real human UniProt IDs
 #' Control1 = c(100, 200, 150, 300, 250),
@@ -43,9 +43,9 @@
 #'   Group = c("Control", "Control", "Treatment", "Treatment")
 #' )
 #'
-#' normalized_obj <- proteo.normalize(raw_data, metadata)
+#' normalized_obj <- proteo.normalize(raw_data, metadata, method = "none")
 #' proteo.deps(normalized_obj)
-#'
+#' }
 #'
 #' @references
 #' Benjamini & Hochberg, 1995. Controlling the false discovery rate: a practical and powerful approach to multiple testing. J R Stat Soc Series B 57:289-300.
@@ -59,11 +59,11 @@ proteo.deps <- function(normalized_data,
                         p_adj_cutoff = 0.05,
                         logfc_cutoff = 0.5,
                         top_n = 10,
-                        db = c("hs", "mm"),
+                        organism = c("mouse", "human"),
                         plot = TRUE,
                         verbose = TRUE) {
 
-  db <- match.arg(db)
+  organism <- match.arg(organism)
 
   # --- 1) Basic checks ---
 
@@ -140,12 +140,12 @@ proteo.deps <- function(normalized_data,
 
   # --- 6) Annotate proteins via clusterProfiler ---
 
-  OrgDb <- switch(db, hs = org.Hs.eg.db::org.Hs.eg.db, mm = org.Mm.eg.db::org.Mm.eg.db)
+  OrgDb <- switch(organism, mouse = org.Mm.eg.db::org.Mm.eg.db, human = org.Hs.eg.db::org.Hs.eg.db)
 
   clean_uniprot <- function(x) {
-    x <- sub("^\w+\|", "", x)
-    x <- sub("\|.*$", "", x)
-    x <- sub("-\d+$", "", x)
+    x <- sub("^\\w+\\|", "", x, perl = TRUE)
+    x <- sub("\\|.*$", "", x, perl = TRUE)
+    x <- sub("-\\d+$", "", x, perl = TRUE)
     trimws(x)
   }
 

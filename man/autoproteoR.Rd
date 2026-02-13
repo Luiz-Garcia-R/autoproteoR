@@ -59,20 +59,20 @@ metadata <- data.frame(
   Group  = rep(c("Control", "Treatment"), each = 5)
 )
 
+# Import data
+proteo.import(raw_data, metadata)
 
-obj <- proteo.import(raw_data, metadata)
-normalized <- proteo.normalize(raw_data, metadata)
+# Normalize data
+proteo.normalize(raw_data, metadata, method = "none")
 
-proteo.qc(normalized, metadata)
+# Check normalized data
+proteo.qc(normalized_data)
 
-corr_mat <- proteo.corr(normalized, metadata)
-dimred_res <- proteo.dimred(normalized, metadata)
+# Dimension reduction
+proteo.dimred(normalized_data)
 
-proteo.volcano(normalized, metadata,
-               group_col = "Group",
-               padj_threshold = 0.05,
-               log2fc_threshold = 1,
-               results = TRUE)
+# Volcano plot
+proteo.volcano(normalized_data)
 
 }
 \author{

@@ -7,15 +7,12 @@
 #'
 #' @param normalized_data A data frame with normalized abundances
 #'   (containing a `ProteinID` column) or an object of class `proteoNorm`.
-#' @param metadata A data frame with sample metadata. Must include columns
-#'   `Sample` and the one defined in `group_col`.
 #' @param group_col Column name in `metadata` that identifies the groups
 #'   (default = `"Group"`). Only two groups are supported.
 #' @param padj_threshold Adjusted p-value cutoff (default = 0.05).
 #' @param log2fc_threshold Log2 fold-change cutoff (default = 1).
 #' @param results Logical. If TRUE, returns a list with DEPs (default = FALSE).
 #' @param identify Logical. If TRUE, adds protein labels directly on the plot (default = FALSE).
-#' @param help Logical. If TRUE, prints this help message instead of running the function.
 #'
 #' @return Invisibly returns a list with three elements:
 #'   \describe{
@@ -62,13 +59,16 @@
 #' @importFrom ggrepel geom_text_repel
 #' @export
 
-proteo.volcano <- function(normalized_data, group_col = "Group",
-                           padj_threshold = 0.05, log2fc_threshold = 1,
-                           results = FALSE, identify = FALSE) {
+proteo.volcano <- function(normalized_data,
+                           group_col = "Group",
+                           padj_threshold = 0.05,
+                           log2fc_threshold = 1,
+                           results = FALSE,
+                           identify = FALSE) {
 
   # --- Extract metadata and expression matrix if proteonorm object ---
   if ("proteonorm" %in% class(normalized_data)) {
-    expr_df <- normalized_data$normalized_matrix  # já é data.frame
+    expr_df <- normalized_data$normalized_matrix
     metadata <- normalized_data$metadata
   } else {
     expr_df <- as.data.frame(normalized_data)

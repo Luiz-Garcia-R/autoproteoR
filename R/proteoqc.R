@@ -29,10 +29,10 @@
 #' )
 #'
 #' # Step 1: Normalize
-#' normalized_obj <- proteo.normalize(raw_data, metadata)
+#' normalized_obj <- proteo.normalize(raw_data, metadata, method = "none")
 #'
 #' # Step 2: QC plots
-#' proteo.qc(normalized_obj, metadata)
+#' proteo.qc(normalized_obj)
 #'
 #' @references
 #' Bolstad, B. M., Irizarry, R. A., Åstrand, M., & Speed, T. P. (2003). A comparison of normalization methods for high density oligonucleotide array data. \emph{Bioinformatics}, 19(2), 185–193. <doi:10.1093/bioinformatics/btg405>

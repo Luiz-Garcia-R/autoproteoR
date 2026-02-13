@@ -7,7 +7,7 @@
 proteo.normalize(
   raw_data,
   metadata,
-  method = "log2",
+  method = c("none", "log2", "log10", "quantile", "median", "zscore"),
   remove_zeros = FALSE,
   remove_outliers = TRUE,
   impute = TRUE,
@@ -19,6 +19,7 @@ proteo.normalize(
   assign_result = TRUE,
   assign_name = "normalized_data",
   envir = parent.frame(),
+  verbose = TRUE,
   help = FALSE
 )
 }
@@ -26,10 +27,10 @@ proteo.normalize(
 \item{raw_data}{A \code{data.frame} with protein abundances. Must contain a column with
 protein IDs (e.g., "ProteinID") and columns corresponding to sample names.}
 
-\item{metadata}{A \code{data.frame} with sample metadata. Must contain columns for
-sample names and group/condition labels.}
+\item{metadata}{Optional data frame containing sample metadata. Must contain
+a column named \code{Sample} if provided.}
 
-\item{method}{Character. Normalization method. Options: \code{"log2"} (default), \code{"log10"}, or \code{"none"}.}
+\item{method}{Character. Normalization method. Options: \code{"none"} (default), \code{"log2"}, \code{"log10"}, \code{"quantile"}, \code{"median"}, \code{"zscore"} .}
 
 \item{remove_zeros}{Logical. Whether to remove proteins with zero values in all samples. Default: \code{FALSE}.}
 
@@ -52,6 +53,8 @@ sample names and group/condition labels.}
 \item{assign_name}{Character. Name to assign the resulting object. Default: \code{"normalized_data"}.}
 
 \item{envir}{Environment in which to assign the result if \code{assign_result = TRUE}. Default: parent.frame().}
+
+\item{verbose}{Logical. If TRUE (default), prints messages and progress information.}
 
 \item{help}{Logical. If TRUE, prints this help message and example usage. Default = FALSE.}
 }
@@ -82,8 +85,7 @@ metadata <- data.frame(
   Sample = c("Control_1", "Control_2", "Treatment_1", "Treatment_2"),
   Group = c("Control", "Control", "Treatment", "Treatment")
 )
-normalized_data <- proteo.normalize(raw_data, metadata)
-str(normalized_data)
+proteo.normalize(raw_data, metadata, method = "none")
 
 }
 \references{

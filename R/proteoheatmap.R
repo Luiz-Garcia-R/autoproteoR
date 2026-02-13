@@ -53,7 +53,6 @@
 #'
 #' # Step 2: Generate heatmap
 #' proteo.heatmap(normalized_obj, metadata, top_n = 3)
-#' proteo.heatmap(normalized_obj, metadata, top_n = 3, results = TRUE)
 #' }
 #'
 #' @references
@@ -188,7 +187,3 @@ Usage:
     invisible(NULL)
   }
 }
-
-
-
-

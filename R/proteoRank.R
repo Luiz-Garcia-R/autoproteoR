@@ -3,7 +3,7 @@
 #' Generates a per-group ranking of proteins based on their mean abundance or variance.
 #' The function works with a `proteoNorm` object and can optionally highlight specific proteins in the plot.
 #'
-#' @param norm_data A `proteoNorm` object returned by `proteo.normalize()`.
+#' @param normalized_data A `proteoNorm` object returned by `proteo.normalize()`.
 #' @param group_col Character. Column name in `metadata` that defines sample groups (default: "Group").
 #' @param metric Character. Metric to rank proteins by, either "mean" (default) or "var" (variance).
 #' @param top_n Integer. If provided, only the top N proteins per group are retained.
@@ -23,7 +23,6 @@
 #'
 #' @examples
 #' \dontrun{
-#' @examples
 #' # --- Small replicable dataset ---
 #' normalized_matrix <- data.frame(
 #'   ProteinID = paste0("P", 1:5),
@@ -40,7 +39,6 @@
 #'
 #' proteo_obj <- list(normalized_matrix = normalized_matrix,
 #'                    metadata = metadata)
-#' class(proteo_obj) <- "proteoNorm"
 #'
 #' proteo.rank(proteo_obj, metric = "mean", top_n = 3, highlight_protein = "P1")
 #' }
@@ -59,7 +57,7 @@ proteo.rank <- function(normalized_data,
 
   # --- Extract expression and metadata ---
 
-  if ("proteonorm" %in% class(normalized_data)) {
+  if (inherits(normalized_data, "proteonorm")) {
     expr <- normalized_data$normalized_matrix
     meta <- normalized_data$metadata
   } else {
@@ -68,65 +66,168 @@ proteo.rank <- function(normalized_data,
 
   # --- Check group column ---
 
-  if (!group_col %in% colnames(meta)) stop("Group column not found in metadata.")
+  if (!group_col %in% colnames(meta)) {
+    stop("Group column not found in metadata.")
+  }
+
   groups <- unique(meta[[group_col]])
-  if (length(groups) != 2) stop("Exactly 2 groups are required.")
+
+  if (length(groups) != 2) {
+    stop("Exactly 2 groups are required.")
+  }
 
   # --- Ensure ProteinID column exists ---
 
-  if (!"ProteinID" %in% colnames(expr)) stop("Expression matrix must have a 'ProteinID' column")
-
-  # --- Transform to long format for plotting ---
-
-  library(dplyr)
-  library(tidyr)
-  expr_long <- expr %>%
-    tidyr::pivot_longer(-ProteinID, names_to = "Sample", values_to = "Abundance") %>%
-    dplyr::left_join(meta, by = "Sample")
-
-  # --- Compute ranking metric per protein and group ---
-
-  rank_df <- expr_long %>%
-    dplyr::group_by(ProteinID, !!rlang::sym(group_col)) %>%
-    dplyr::summarize(Metric = if(metric=="mean") mean(Abundance) else var(Abundance), .groups="drop") %>%
-    dplyr::arrange(!!rlang::sym(group_col), dplyr::desc(Metric)) %>%
-    dplyr::group_by(!!rlang::sym(group_col)) %>%
-    dplyr::mutate(Rank = dplyr::row_number())
-
-  # --- Filter top N if requested ---
-
-  if(!is.null(top_n)){
-    rank_df <- rank_df %>% dplyr::group_by(!!rlang::sym(group_col)) %>% dplyr::slice_head(n = top_n)
+  if (!"ProteinID" %in% colnames(expr)) {
+    stop("Expression matrix must have a 'ProteinID' column")
   }
 
-  # --- Merge rank back to long data ---
+  # --- Transform to long format ---
 
-  plot_df <- expr_long %>% dplyr::inner_join(rank_df %>% dplyr::select(ProteinID, !!rlang::sym(group_col), Rank),
-                                             by = c("ProteinID", group_col))
+  expr_long <- tidyr::pivot_longer(
+    expr,
+    cols = -ProteinID,
+    names_to = "Sample",
+    values_to = "Abundance"
+  )
+
+  expr_long <- dplyr::left_join(
+    expr_long,
+    meta,
+    by = "Sample"
+  )
+
+  group_sym <- rlang::sym(group_col)
+
+  # --- Compute ranking metric ---
+
+  rank_df <- dplyr::group_by(
+    expr_long,
+    ProteinID,
+    !!group_sym
+  )
+
+  rank_df <- dplyr::summarise(
+    rank_df,
+    Metric = if (metric == "mean") {
+      mean(Abundance, na.rm = TRUE)
+    } else {
+      stats::var(Abundance, na.rm = TRUE)
+    },
+    .groups = "drop"
+  )
+
+  rank_df <- dplyr::arrange(
+    rank_df,
+    !!group_sym,
+    dplyr::desc(Metric)
+  )
+
+  rank_df <- dplyr::group_by(
+    rank_df,
+    !!group_sym
+  )
+
+  rank_df <- dplyr::mutate(
+    rank_df,
+    Rank = dplyr::row_number()
+  )
+
+  # --- Filter top N ---
+
+  if (!is.null(top_n)) {
+
+    rank_df <- dplyr::slice_head(
+      rank_df,
+      n = top_n
+    )
+  }
+
+  # --- Merge back ---
+
+  rank_subset <- dplyr::select(
+    rank_df,
+    ProteinID,
+    !!group_sym,
+    Rank
+  )
+
+  plot_df <- dplyr::inner_join(
+    expr_long,
+    rank_subset,
+    by = c("ProteinID", group_col)
+  )
 
   # --- Plot ---
 
-  p <- ggplot2::ggplot(plot_df, ggplot2::aes(x = Rank, y = Abundance, color = !!rlang::sym(group_col))) +
+  p <- ggplot2::ggplot(
+    plot_df,
+    ggplot2::aes(
+      x = Rank,
+      y = Abundance,
+      color = !!group_sym
+    )
+  ) +
     ggplot2::geom_point(alpha = 0.5, size = 2) +
-    ggplot2::facet_wrap(as.formula(paste("~", group_col)), scales = "free_x", nrow = 1) +
-    ggplot2::labs(x = "Protein rank", y = paste0("Abundance (", metric, ")"),
-                  title = paste("Protein ranking by", metric, "per group")) +
+    ggplot2::facet_wrap(
+      stats::as.formula(paste("~", group_col)),
+      scales = "free_x",
+      nrow = 1
+    ) +
+    ggplot2::labs(
+      x = "Protein rank",
+      y = paste0("Abundance (", metric, ")"),
+      title = paste("Protein ranking by", metric, "per group")
+    ) +
     ggplot2::theme_minimal(base_size = 12)
 
-  # --- Highlight specific proteins ---
+  # --- Highlight proteins ---
 
-  if(!is.null(highlight_protein)){
-    highlight_points <- plot_df %>% dplyr::filter(ProteinID %in% highlight_protein)
+  if (!is.null(highlight_protein)) {
 
-    highlight_labels <- highlight_points %>% dplyr::group_by(ProteinID, !!rlang::sym(group_col)) %>%
-      dplyr::slice_max(Abundance, n=1, with_ties = FALSE) %>% dplyr::ungroup()
+    highlight_points <- dplyr::filter(
+      plot_df,
+      ProteinID %in% highlight_protein
+    )
+
+    highlight_labels <- dplyr::group_by(
+      highlight_points,
+      ProteinID,
+      !!group_sym
+    )
+
+    highlight_labels <- dplyr::slice_max(
+      highlight_labels,
+      Abundance,
+      n = 1,
+      with_ties = FALSE
+    )
+
+    highlight_labels <- dplyr::ungroup(highlight_labels)
 
     p <- p +
-      ggplot2::geom_point(data=highlight_points, color="#FF6600", size=4) +
-      ggplot2::geom_text(data=highlight_labels, ggplot2::aes(label=ProteinID),
-                         vjust=-1, size=4, color="black")
+      ggplot2::geom_point(
+        data = highlight_points,
+        color = "#FF6600",
+        size = 4
+      ) +
+      ggplot2::geom_text(
+        data = highlight_labels,
+        ggplot2::aes(label = ProteinID),
+        vjust = -1,
+        size = 4,
+        color = "black"
+      )
   }
 
-  if(plot) print(p)
-  invisible(list(ranked_proteins = rank_df, plot = p))
+  if (plot) {
+    print(p)
+  }
+
+  invisible(
+    list(
+      ranked_proteins = rank_df,
+      plot = p
+    )
+  )
 }
