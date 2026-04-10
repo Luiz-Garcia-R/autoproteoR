@@ -20,7 +20,7 @@ Main Functions Overview\tabular{ll}{
    \code{proteo.dimred()} \tab PCA and UMAP dimensionality reduction \cr
    \code{proteo.enrich()} \tab GO enrichment analysis \cr
    \code{proteo.heatmap()} \tab For top variable proteins \cr
-   \code{proteo.ttest()} \tab T-test or Mann-Whitney test \cr
+   \code{proteo.boxplot()} \tab Limma moderated t-tes \cr
    \code{proteo.venn()} \tab Venn diagrams \cr
    \code{proteo.volcano()} \tab For differentially expressed proteins \cr
    \code{proteo.roc()} \tab ROC curve for classification analysis \cr

@@ -2,7 +2,7 @@
 #'
 #' This function performs pairwise comparison between two groups of samples
 #' in a normalized proteomics dataset. It calculates log2 fold-changes,
-#' performs t-tests per protein, adjusts p-values for multiple testing,
+#' performs Limma moderated t-test, adjusts p-values for multiple testing,
 #' and annotates UniProt IDs using \code{clusterProfiler::bitr}. Optionally,
 #' it generates a bar plot of the top up- and down-regulated proteins.
 #'
@@ -96,21 +96,42 @@ proteo.deps <- function(normalized_data,
   samples_g1 <- meta$Sample[meta[[group_col]] == g1]
   samples_g2 <- meta$Sample[meta[[group_col]] == g2]
 
-  # --- 3) T-test per protein ---
+  # --- 3) Differential analysis using limma ---
 
-  do_ttest <- function(i) {
-    x1 <- as.numeric(mat[i, samples_g1])
-    x2 <- as.numeric(mat[i, samples_g2])
-    if (all(is.na(x1)) || all(is.na(x2))) return(c(logFC = NA, pvalue = NA))
-    logFC <- mean(x2, na.rm = TRUE) - mean(x1, na.rm = TRUE)
-    pval <- tryCatch(stats::t.test(x1, x2)$p.value, error = function(e) NA_real_)
-    c(logFC = logFC, pvalue = pval)
+  if (!requireNamespace("limma", quietly = TRUE)) {
+    stop("Please install 'limma'")
   }
 
-  stats <- t(vapply(seq_len(nrow(mat)), do_ttest, numeric(2)))
-  stats <- as.data.frame(stats, stringsAsFactors = FALSE)
-  stats[[id_col]] <- mat[[id_col]]  # add UniProt IDs
-  stats$pvalue <- as.numeric(stats$pvalue)
+  expr_mat <- as.matrix(mat[, sample_cols])
+  rownames(expr_mat) <- mat[[id_col]]
+
+  meta <- meta[match(colnames(expr_mat), meta$Sample), ]
+
+  group_factor <- factor(meta[[group_col]])
+  design <- stats::model.matrix(~0 + group_factor)
+  colnames(design) <- levels(group_factor)
+
+  fit <- limma::lmFit(expr_mat, design)
+
+  contrast <- paste0(g2, "-", g1)
+  contrast_matrix <- limma::makeContrasts(contrasts = contrast, levels = design)
+
+  fit <- limma::contrasts.fit(fit, contrast_matrix)
+  fit <- limma::eBayes(fit)
+
+  tt <- limma::topTable(
+    fit,
+    coef = 1,
+    number = Inf,
+    sort.by = "none"
+  )
+
+  stats <- tt
+  stats[[id_col]] <- rownames(tt)
+  stats <- stats[, c(id_col, "logFC", "P.Value", "adj.P.Val")]
+
+  colnames(stats) <- c(id_col, "logFC", "pvalue", "padj")
+
   stats$padj <- p.adjust(stats$pvalue, method = "BH")
 
   # --- 4) Filter DEPs ---
@@ -179,7 +200,7 @@ proteo.deps <- function(normalized_data,
     p <- ggplot2::ggplot(top, ggplot2::aes(y = PlotLabel, x = logFC, fill = direction)) +
       ggplot2::geom_col() +
       ggplot2::labs(y = "", x = "log2 fold-change",
-                    title = sprintf("Top %d Up- and Down-regulated Proteins (%s vs %s)", top_n, g2, g1)) +
+                    title = sprintf("Top %d Up- and Down-regulated Proteins", top_n, g2, g1)) +
       ggplot2::scale_fill_manual(values = c("Up" = "red", "Down" = "blue")) +
       ggplot2::theme_minimal() +
       ggplot2::theme(legend.position = "bottom")

@@ -51,7 +51,7 @@ A list of class \code{proteoDeps} containing:
 \description{
 This function performs pairwise comparison between two groups of samples
 in a normalized proteomics dataset. It calculates log2 fold-changes,
-performs t-tests per protein, adjusts p-values for multiple testing,
+performs Limma moderated t-test, adjusts p-values for multiple testing,
 and annotates UniProt IDs using \code{clusterProfiler::bitr}. Optionally,
 it generates a bar plot of the top up- and down-regulated proteins.
 }

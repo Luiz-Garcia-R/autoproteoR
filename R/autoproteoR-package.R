@@ -14,7 +14,7 @@
 #' | `proteo.dimred()`  | PCA and UMAP dimensionality reduction |
 #' | `proteo.enrich()`  | GO enrichment analysis |
 #' | `proteo.heatmap()` | For top variable proteins |
-#' | `proteo.ttest()`   | T-test or Mann-Whitney test |
+#' | `proteo.boxplot()` | Limma moderated t-tes |
 #' | `proteo.venn()`    | Venn diagrams |
 #' | `proteo.volcano()` | For differentially expressed proteins |
 #' | `proteo.roc()`     | ROC curve for classification analysis |

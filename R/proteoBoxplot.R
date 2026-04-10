@@ -10,17 +10,11 @@
 #' @param protein_id Character. The ID of the protein to test (must be present in `normalized_data`).
 #' @param group_col Character. Column name in `metadata` defining the groups
 #'   (default = `"Group"`). Only two groups are currently supported.
-#' @param return_type Either `"htest"` (returns only the test result) or `"all"`
-#'   (returns test, data, and plot). Default = `"htest"`.
 #'
 #' @return Invisibly returns:
-#'   - if `return_type = "htest"`: an object of class \code{htest} (t-test or Wilcoxon test).
-#'   - if `return_type = "all"`: a list with:
-#'     \describe{
 #'       \item{test}{The statistical test result (htest object).}
 #'       \item{data}{Long-format data frame used for the test and plotting.}
 #'       \item{plot}{A ggplot2 object with boxplot + jitter.}
-#'     }
 #'
 #' @examples
 #' \dontrun{
@@ -38,7 +32,7 @@
 #'   Group = c("Control", "Control", "Treatment", "Treatment")
 #' )
 #'
-#' # Perform limma t-test for protein "P1"
+#' # Perform limma moderated t-test for protein "P1"
 #' result <- proteo.boxplot(normalized_data, protein_id = "P1")
 #' }
 #'
@@ -50,19 +44,14 @@
 
 proteo.boxplot <- function(normalized_data,
                            metadata = NULL,
-                           protein_id,
-                           group_col = "Group",
-                           return_type = c("all", "htest")) {
-
-  return_type <- match.arg(return_type)
+                           protein_id = NULL,
+                           group_col = "Group") {
 
   # -------------------------
   # Packages
   # -------------------------
-  if (!requireNamespace("limma", quietly = TRUE))
-    stop("Package 'limma' is required.")
 
-  pkgs <- c("ggplot2", "dplyr", "tidyr")
+  pkgs <- c("ggplot2", "dplyr", "limma", "tidyr")
   miss <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]
   if (length(miss)) stop("Install: ", paste(miss, collapse = ", "))
 
@@ -82,21 +71,20 @@ proteo.boxplot <- function(normalized_data,
     normalized_data <- normalized_data$normalized_matrix
   }
 
-
   if (is.null(metadata))
     stop("metadata required")
-
 
   # -------------------------
   # Detect ProteinID
   # -------------------------
+  input_id <- protein_id
+
   id_names <- c("ProteinID", "Protein_ID", "Accession")
 
   protein_col <- intersect(id_names, names(normalized_data))[1]
 
   if (is.na(protein_col))
     stop("ProteinID column not found")
-
 
   # -------------------------
   # Sample column
@@ -108,13 +96,11 @@ proteo.boxplot <- function(normalized_data,
   if (is.na(sample_col))
     stop("Sample column not found")
 
-
   # -------------------------
   # Group column
   # -------------------------
   if (!group_col %in% names(metadata))
     stop("group_col not found")
-
 
   # -------------------------
   # Build expression matrix
@@ -122,17 +108,47 @@ proteo.boxplot <- function(normalized_data,
   mat <- normalized_data
 
   rownames(mat) <- mat[[protein_col]]
+  rownames(mat) <- sub(".*\\|", "", rownames(mat))
+  rownames(mat) <- sub("\\|.*", "", rownames(mat))
 
   mat <- mat[, !names(mat) %in% protein_col]
-
   mat <- as.matrix(mat)
 
   storage.mode(mat) <- "numeric"
 
+  # -------------------------
+  # Resolve protein identifier
+  # -------------------------
 
-  if (!protein_id %in% rownames(mat))
-    stop("Protein not found")
+  if (!(protein_id %in% rownames(mat))) {
 
+    if (!requireNamespace("clusterProfiler", quietly = TRUE))
+      stop("Package 'clusterProfiler' required for SYMBOL lookup.")
+
+    if (!requireNamespace("org.Hs.eg.db", quietly = TRUE))
+      stop("Install 'org.Hs.eg.db' for SYMBOL mapping.")
+
+    anno <- clusterProfiler::bitr(
+      protein_id,
+      fromType = "SYMBOL",
+      toType = "UNIPROT",
+      OrgDb = org.Hs.eg.db::org.Hs.eg.db
+    )
+
+    if (nrow(anno) == 0)
+      stop("Protein not found as UNIPROT or SYMBOL.")
+
+  # -------------------------
+  # Map Uniprot ID
+  # -------------------------
+  mapped_ids <- unique(anno$UNIPROT)
+  mapped_id <- intersect(mapped_ids, rownames(mat))
+
+  if (length(mapped_id) == 0)
+    stop("Mapped UNIPROT not present in dataset.")
+
+  protein_id <- mapped_id[1]
+  }
 
   # -------------------------
   # Metadata order
@@ -171,9 +187,7 @@ proteo.boxplot <- function(normalized_data,
   # limma fit
   # -------------------------
   fit <- limma::lmFit(mat, design)
-
   fit <- limma::contrasts.fit(fit, contrast_matrix)
-
   fit <- limma::eBayes(fit)
 
 
@@ -184,9 +198,7 @@ proteo.boxplot <- function(normalized_data,
     sort.by = "none"
   )
 
-
   prot_res <- tt[protein_id, ]
-
 
   # -------------------------
   # Long data for plot
@@ -202,6 +214,15 @@ proteo.boxplot <- function(normalized_data,
     by = setNames(sample_col, "Sample")
   )
 
+  groups <- levels(meta[[group_col]])
+
+  g1 <- df_long$Abundance[df_long[[group_col]] == groups[1]]
+  g2 <- df_long$Abundance[df_long[[group_col]] == groups[2]]
+
+  plot_title <- protein_id
+  if (exists("anno") && nrow(anno) > 0) {
+    plot_title <- anno$SYMBOL[1]
+  }
 
   # -------------------------
   # P label
@@ -214,40 +235,44 @@ proteo.boxplot <- function(normalized_data,
   else if (pval < 0.05) "*"
   else "ns"
 
-
-  y_pos <- max(df_long$Abundance, na.rm = TRUE) * 1.1
-
+  p_label <- if (pval < 0.001) {
+    "p < 0.001"
+  } else {
+    paste0("p = ", formatC(pval, format = "f", digits = 3))
+  }
 
   # -------------------------
   # Plot
   # -------------------------
-  p <- ggplot2::ggplot(
-    df_long,
-    ggplot2::aes(
-      x = .data[[group_col]],
-      y = Abundance,
-      fill = .data[[group_col]]
-    )
-  ) +
-    ggplot2::geom_violin(trim = FALSE, alpha = 0.4, adjust = 0.6) +
-    ggplot2::geom_boxplot(width = 0.18, outlier.shape = NA, color = "gray20", linewidth = 0.4) +
-    ggplot2::geom_point(position = ggplot2::position_jitter(width = 0.1), alpha = 0.4, size = 1.8, color = "gray25") +
-    ggplot2::geom_jitter(width = 0.1, alpha = 0.5) +
-    ggplot2::annotate(
-      "text", x = 1.5, y = y_pos,
-      label = signif_label, size = 5
-    ) +
-    ggplot2::labs(
-      title = protein_id,
-      x = "",
-      y = "Normalized abundance"
-    ) +
+  y_max <- max(df_long$Abundance, na.rm = TRUE)
+  y_pos <- y_max * 1.08
+  y_lim <- y_max * 1.1
+
+  p <- ggplot2::ggplot(df_long, ggplot2::aes(x = .data[[group_col]], y = Abundance, fill = .data[[group_col]])) +
+    ggplot2::geom_boxplot(alpha = 0.75, outlier.shape = NA, width = 0.5) +
+    ggplot2::geom_jitter(width = 0.1, alpha = 0.65, color = "black") +
+    ggplot2::annotate("segment",
+                      x = 1, xend = 2,
+                      y = y_pos * 0.98, yend = y_pos * 0.98) +
+    ggplot2::annotate("text",
+                      x = 1.5, y = y_pos,
+                      label = signif_label,
+                      size = 5) +
     ggplot2::theme_minimal(base_size = 12) +
     ggplot2::theme(
       legend.position = "none",
-      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)
-    )
-
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, size = 12),
+      plot.title = ggplot2::element_text(hjust = 0.5)
+    ) +
+    ggplot2::labs(
+      title = plot_title,
+      subtitle = paste0(
+        "logFC = ", round(prot_res$logFC, 2),
+        " | p = ", p_label),
+      x = "",
+      y = "Normalized abundance"
+    ) +
+    ggplot2::scale_y_continuous(limits = c(NA, y_lim), expand = c(0.02, 0))
 
   print(p)
 
@@ -262,10 +287,16 @@ proteo.boxplot <- function(normalized_data,
     plot  = p
   )
 
+  # --- Summary ---
+  cat("=== Results ===\n")
+  cat("Protein:", input_id, "\n")
+  cat("Groups:", groups[1], "vs", groups[2], "\n")
+  cat("Means:", signif(mean(g1, na.rm = TRUE), 3),
+      "vs", signif(mean(g2, na.rm = TRUE), 3), "\n")
+  cat("logFC:", signif(prot_res$logFC, 3), "\n")
+  cat("p-value:", signif(pval, 3), signif_label, "\n")
+  cat("================\n")
 
-  if (return_type == "all") {
-    return(out)
-  } else {
-    return(prot_res)
-  }
+  return(invisible(out))
+
 }

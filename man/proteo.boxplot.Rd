@@ -7,9 +7,8 @@
 proteo.boxplot(
   normalized_data,
   metadata = NULL,
-  protein_id,
-  group_col = "Group",
-  return_type = c("all", "htest")
+  protein_id = NULL,
+  group_col = "Group"
 )
 }
 \arguments{
@@ -23,21 +22,12 @@ and the grouping column specified in \code{group_col}.}
 
 \item{group_col}{Character. Column name in \code{metadata} defining the groups
 (default = \code{"Group"}). Only two groups are currently supported.}
-
-\item{return_type}{Either \code{"htest"} (returns only the test result) or \code{"all"}
-(returns test, data, and plot). Default = \code{"htest"}.}
 }
 \value{
 Invisibly returns:
-\itemize{
-\item if \code{return_type = "htest"}: an object of class \code{htest} (t-test or Wilcoxon test).
-\item if \code{return_type = "all"}: a list with:
-\describe{
 \item{test}{The statistical test result (htest object).}
 \item{data}{Long-format data frame used for the test and plotting.}
 \item{plot}{A ggplot2 object with boxplot + jitter.}
-}
-}
 }
 \description{
 Performs a limma t moderated test for the normalized abundance of a specific protein across two groups.
@@ -59,7 +49,7 @@ metadata <- data.frame(
   Group = c("Control", "Control", "Treatment", "Treatment")
 )
 
-# Perform limma t-test for protein "P1"
+# Perform limma moderated t-test for protein "P1"
 result <- proteo.boxplot(normalized_data, protein_id = "P1")
 }
 

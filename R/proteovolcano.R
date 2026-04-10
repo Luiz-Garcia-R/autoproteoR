@@ -112,53 +112,97 @@ proteo.volcano <- function(normalized_data,
 
   expr_sub <- expr_mat[, c(g1_samples, g2_samples), drop = FALSE]
 
-  # --- Compute t-tests and log2 fold changes ---
-  res_df <- data.frame(Protein = rownames(expr_sub),
-                       log2FoldChange = NA_real_,
-                       pvalue = NA_real_)
+  # --- limma design ---
+  group_factor <- factor(metadata[[group_col]][match(colnames(expr_sub), metadata[[sample_col]])])
 
-  for (i in seq_len(nrow(expr_sub))) {
-    vals1 <- as.numeric(expr_sub[i, g1_samples])
-    vals2 <- as.numeric(expr_sub[i, g2_samples])
-    if (length(vals1) < 2 || length(vals2) < 2) {
-      res_df$pvalue[i] <- NA
-      res_df$log2FoldChange[i] <- NA
-    } else {
-      ttest <- try(stats::t.test(vals2, vals1), silent = TRUE)
-      if (inherits(ttest, "try-error")) {
-        res_df$pvalue[i] <- NA
-        res_df$log2FoldChange[i] <- NA
-      } else {
-        res_df$pvalue[i] <- ttest$p.value
-        res_df$log2FoldChange[i] <- mean(vals2, na.rm = TRUE) - mean(vals1, na.rm = TRUE)
-      }
-    }
+  design <- model.matrix(~0 + group_factor)
+  colnames(design) <- levels(group_factor)
+
+  contrast <- paste0(levels(group_factor)[2], "-", levels(group_factor)[1])
+
+  contrast_matrix <- limma::makeContrasts(
+    contrasts = contrast,
+    levels = design
+  )
+
+  # --- limma fit ---
+  fit <- limma::lmFit(expr_sub, design)
+  fit <- limma::contrasts.fit(fit, contrast_matrix)
+  fit <- limma::eBayes(fit)
+
+  tt <- limma::topTable(
+    fit,
+    coef = 1,
+    number = Inf,
+    sort.by = "none"
+  )
+
+  res_df <- data.frame(
+    Protein = rownames(tt),
+    log2FoldChange = tt$logFC,
+    pvalue = tt$P.Value,
+    padj = tt$adj.P.Val
+  )
+
+  # --- Annotate proteins via clusterProfiler ---
+  # --- Annotate proteins (UNIPROT -> SYMBOL) ---
+
+  if (!requireNamespace("clusterProfiler", quietly = TRUE))
+    stop("Package 'clusterProfiler' required for annotation.")
+
+  if (!requireNamespace("org.Hs.eg.db", quietly = TRUE))
+    stop("Install 'org.Hs.eg.db' for human annotation.")
+
+  clean_uniprot <- function(x) {
+    x <- sub("^\\w+\\|", "", x, perl = TRUE)
+    x <- sub("\\|.*$", "", x, perl = TRUE)
+    x <- sub("-\\d+$", "", x, perl = TRUE)
+    trimws(x)
   }
 
-  res_df$padj <- stats::p.adjust(res_df$pvalue, method = "BH")
-  res_df <- res_df[!is.na(res_df$pvalue), ]
+  res_df$UNIPROT <- clean_uniprot(res_df$Protein)
+
+  anno <- clusterProfiler::bitr(
+    unique(res_df$UNIPROT),
+    fromType = "UNIPROT",
+    toType = "SYMBOL",
+    OrgDb = org.Hs.eg.db::org.Hs.eg.db
+  )
+
+  res_df <- merge(
+    res_df,
+    anno[, c("UNIPROT", "SYMBOL")],
+    by = "UNIPROT",
+    all.x = TRUE
+  )
+
+  res_df$PlotLabel <- ifelse(
+    !is.na(res_df$SYMBOL) & nzchar(res_df$SYMBOL),
+    res_df$SYMBOL,
+    res_df$UNIPROT
+  )
 
   # --- Volcano summary ---
-  up <- res_df$Protein[res_df$padj < padj_threshold & res_df$log2FoldChange > log2fc_threshold]
-  down <- res_df$Protein[res_df$padj < padj_threshold & res_df$log2FoldChange < -log2fc_threshold]
+  up <- res_df$UNIPROT[
+    res_df$padj < padj_threshold &
+      res_df$log2FoldChange > log2fc_threshold
+  ]
 
-  message("=== Volcano summary ===")
-  message("Groups: ", groups[1], " vs ", groups[2])
-  message("Up (", groups[2], "): ", length(up))
-  message("Down (", groups[1], "): ", length(down))
-  message("padj threshold: ", padj_threshold, " | log2FC threshold: ", log2fc_threshold)
-  message("=================================")
+  down <- res_df$UNIPROT[
+    res_df$padj < padj_threshold &
+      res_df$log2FoldChange < -log2fc_threshold
+  ]
 
   # --- Volcano plot ---
   res_df$group_color <- factor(ifelse(res_df$padj < padj_threshold & res_df$log2FoldChange > log2fc_threshold, "Up",
                                       ifelse(res_df$padj < padj_threshold & res_df$log2FoldChange < -log2fc_threshold, "Down", "NS")))
 
-  p <- ggplot2::ggplot(res_df, ggplot2::aes(x = log2FoldChange, y = -log10(pvalue), color = group_color)) +
+  p <- ggplot2::ggplot(res_df, ggplot2::aes(x = log2FoldChange, y = -log10(padj), color = group_color)) +
     ggplot2::geom_point(size = 2, na.rm = TRUE) +
     ggplot2::scale_color_manual(values = c("Up" = "#ff3333", "Down" = "#006699", "NS" = "darkgrey")) +
     ggplot2::labs(color = "Regulation",
                   x = "log2 Fold Change",
-                  y = "-log10(p-value)",
+                  y = "-log10(p-adj)",
                   title = paste0(groups[2], " vs ", groups[1])) +
     ggplot2::theme_minimal(base_size = 12) +
     ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5),
@@ -167,10 +211,23 @@ proteo.volcano <- function(normalized_data,
                    panel.background = ggplot2::element_rect(fill = "white", color = NA))
 
   if (identify) {
-    p <- p + ggrepel::geom_text_repel(ggplot2::aes(label = Protein), size = 3, max.overlaps = 50, na.rm = TRUE)
+    p <- p + ggrepel::geom_text_repel(
+      ggplot2::aes(label = PlotLabel),
+      size = 3,
+      max.overlaps = 50
+    )
   }
 
   print(p)
+
+  # --- Return ---
+  message("=== Volcano summary ===")
+  message("Groups: ", groups[1], " vs ", groups[2])
+  message("Up (", groups[2], "): ", length(up))
+  message("Down (", groups[1], "): ", length(down))
+  message("padj threshold: ", padj_threshold, " | log2FC threshold: ", log2fc_threshold)
+  message("=================================")
+
   volcano_deps <- list(up = up, down = down, full_results = res_df)
 
   if (results) return(volcano_deps)
